@@ -1,0 +1,69 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: digital-wallet
+
+  # 1. Cấu hình Cơ sở dữ liệu PostgreSQL
+  datasource:
+    url: jdbc:postgresql://localhost:5432/digital_wallet
+    username: wallet_user
+    password: wallet_password
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+
+  # Cấu hình Hibernate JPA
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update # Tự động tạo/cập nhật bảng trong giai đoạn dev (sẽ chuyển sang validate khi dùng Flyway)
+    show-sql: true
+    open-in-view: false
+    properties:
+      hibernate.format_sql: true
+
+  # 2. Cấu hình Redis
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+
+  # 3. Cấu hình Apache Kafka (Event-Driven Broker)
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all # Đảm bảo tính bất biến và bền vững dữ liệu tài chính
+      retries: 3
+    consumer:
+      group-id: digital-wallet-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.example.digital_wallet.*"
+
+
+# 4. Cấu hình Resilience4j Fault Tolerance (Worker Cổng thanh toán)
+resilience4j:
+  circuitbreaker:
+    instances:
+      paymentGateway:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 20s
+        permitted-number-of-calls-in-half-open-state: 3
+  retry:
+    instances:
+      paymentGateway:
+        max-attempts: 3
+        wait-duration: 1000ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
