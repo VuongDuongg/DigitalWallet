@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -160,5 +161,79 @@ public class WalletService {
                 .message("Giao dịch đang được xử lý")
                 .createdAt(transaction.getCreatedAt())
                 .build();
+    }
+
+    @Transactional
+    public WalletAccount createAccount(com.example.digital_wallet.model.dto.CreateAccountRequest request) {
+        if (accountRepository.existsByUserId(request.getUserId())) {
+            throw new IllegalArgumentException("Người dùng đã có tài khoản ví: " + request.getUserId());
+        }
+
+        WalletAccount account = WalletAccount.builder()
+                .userId(request.getUserId())
+                .currency(request.getCurrency() != null ? request.getCurrency() : "VND")
+                .status(AccountStatus.ACTIVE)
+                .build();
+        return accountRepository.save(account);
+    }
+
+    @Transactional
+    public TransactionResponse deposit(com.example.digital_wallet.model.dto.DepositRequest request) {
+        WalletAccount account = accountRepository.findById(request.getAccountId())
+                .orElseThrow(() -> new AccountNotFoundException("Không tìm thấy tài khoản: " + request.getAccountId()));
+
+        if (account.getStatus() != AccountStatus.ACTIVE) {
+            throw new AccountNotActiveException("Tài khoản đang bị khóa hoặc không hoạt động");
+        }
+
+        Transaction transaction = Transaction.builder()
+                .idempotencyKey("deposit-" + UUID.randomUUID())
+                .targetAccount(account)
+                .amount(request.getAmount())
+                .status(TransactionStatus.COMPLETED)
+                .build();
+        transaction = transactionRepository.save(transaction);
+
+        // Ghi bút toán CREDIT vào sổ cái
+        LedgerEntry creditEntry = LedgerEntry.builder()
+                .transaction(transaction)
+                .account(account)
+                .entryType(EntryType.CREDIT)
+                .amount(request.getAmount())
+                .build();
+        ledgerEntryRepository.save(creditEntry);
+
+        log.info("Nạp tiền thành công: accountId={}, amount={}", account.getAccountId(), request.getAmount());
+
+        return TransactionResponse.builder()
+                .transactionId(transaction.getTransactionId())
+                .targetAccountId(account.getAccountId())
+                .amount(transaction.getAmount())
+                .status(transaction.getStatus())
+                .message("Nạp tiền thành công")
+                .createdAt(transaction.getCreatedAt())
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public BigDecimal getBalance(UUID accountId) {
+        if (!accountRepository.existsById(accountId)) {
+            throw new AccountNotFoundException("Không tìm thấy tài khoản: " + accountId);
+        }
+        return ledgerEntryRepository.calculateCurrentBalance(accountId);
+    }
+
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<LedgerEntry> getLedgerHistory(UUID accountId, org.springframework.data.domain.Pageable pageable) {
+        if (!accountRepository.existsById(accountId)) {
+            throw new AccountNotFoundException("Không tìm thấy tài khoản: " + accountId);
+        }
+        return ledgerEntryRepository.findByAccount_AccountIdOrderByCreatedAtDesc(accountId, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Transaction getTransaction(UUID transactionId) {
+        return transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy giao dịch: " + transactionId));
     }
 }
