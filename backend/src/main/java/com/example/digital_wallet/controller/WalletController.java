@@ -2,10 +2,9 @@ package com.example.digital_wallet.controller;
 
 import com.example.digital_wallet.model.dto.CreateAccountRequest;
 import com.example.digital_wallet.model.dto.DepositRequest;
+import com.example.digital_wallet.model.dto.LedgerEntryResponse;
 import com.example.digital_wallet.model.dto.TransactionResponse;
 import com.example.digital_wallet.model.dto.TransferRequest;
-import com.example.digital_wallet.model.entity.LedgerEntry;
-import com.example.digital_wallet.model.entity.Transaction;
 import com.example.digital_wallet.model.entity.WalletAccount;
 import com.example.digital_wallet.service.WalletService;
 import jakarta.validation.Valid;
@@ -81,10 +80,10 @@ public class WalletController {
      * 5. Lấy lịch sử biến động số dư (Ledger History phân trang)
      */
     @GetMapping("/{accountId}/ledger")
-    public ResponseEntity<Page<LedgerEntry>> getLedgerHistory(
+    public ResponseEntity<Page<LedgerEntryResponse>> getLedgerHistory(
             @PathVariable UUID accountId,
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        Page<LedgerEntry> entries = walletService.getLedgerHistory(accountId, pageable);
+        Page<LedgerEntryResponse> entries = walletService.getLedgerHistory(accountId, pageable);
         return ResponseEntity.ok(entries);
     }
 
@@ -92,8 +91,8 @@ public class WalletController {
      * 6. Tra cứu chi tiết & trạng thái giao dịch (PENDING -> COMPLETED hoặc FAILED)
      */
     @GetMapping("/transactions/{transactionId}")
-    public ResponseEntity<Transaction> getTransaction(@PathVariable UUID transactionId) {
-        Transaction transaction = walletService.getTransaction(transactionId);
+    public ResponseEntity<TransactionResponse> getTransaction(@PathVariable UUID transactionId) {
+        TransactionResponse transaction = walletService.getTransaction(transactionId);
         return ResponseEntity.ok(transaction);
     }
 }

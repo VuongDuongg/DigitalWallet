@@ -3,6 +3,7 @@ package com.example.digital_wallet.service;
 import com.example.digital_wallet.exception.AccountNotActiveException;
 import com.example.digital_wallet.exception.AccountNotFoundException;
 import com.example.digital_wallet.exception.InsufficientBalanceException;
+import com.example.digital_wallet.model.dto.LedgerEntryResponse;
 import com.example.digital_wallet.model.dto.TransactionResponse;
 import com.example.digital_wallet.model.dto.TransferRequest;
 import com.example.digital_wallet.model.entity.LedgerEntry;
@@ -224,16 +225,34 @@ public class WalletService {
     }
 
     @Transactional(readOnly = true)
-    public org.springframework.data.domain.Page<LedgerEntry> getLedgerHistory(UUID accountId, org.springframework.data.domain.Pageable pageable) {
+    public org.springframework.data.domain.Page<LedgerEntryResponse> getLedgerHistory(UUID accountId, org.springframework.data.domain.Pageable pageable) {
         if (!accountRepository.existsById(accountId)) {
             throw new AccountNotFoundException("Không tìm thấy tài khoản: " + accountId);
         }
-        return ledgerEntryRepository.findByAccount_AccountIdOrderByCreatedAtDesc(accountId, pageable);
+        return ledgerEntryRepository.findByAccount_AccountIdOrderByCreatedAtDesc(accountId, pageable)
+                .map(entry -> LedgerEntryResponse.builder()
+                        .entryId(entry.getEntryId())
+                        .transactionId(entry.getTransaction() != null ? entry.getTransaction().getTransactionId() : null)
+                        .accountId(entry.getAccount() != null ? entry.getAccount().getAccountId() : null)
+                        .entryType(entry.getEntryType())
+                        .amount(entry.getAmount())
+                        .createdAt(entry.getCreatedAt())
+                        .build());
     }
 
     @Transactional(readOnly = true)
-    public Transaction getTransaction(UUID transactionId) {
-        return transactionRepository.findById(transactionId)
+    public TransactionResponse getTransaction(UUID transactionId) {
+        Transaction tx = transactionRepository.findById(transactionId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy giao dịch: " + transactionId));
+        return TransactionResponse.builder()
+                .transactionId(tx.getTransactionId())
+                .idempotencyKey(tx.getIdempotencyKey())
+                .sourceAccountId(tx.getSourceAccount() != null ? tx.getSourceAccount().getAccountId() : null)
+                .targetAccountId(tx.getTargetAccount() != null ? tx.getTargetAccount().getAccountId() : null)
+                .amount(tx.getAmount())
+                .status(tx.getStatus())
+                .message(tx.getFailureReason())
+                .createdAt(tx.getCreatedAt())
+                .build();
     }
 }
