@@ -1,0 +1,31 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50/60 text-slate-800 min-h-screen selection:bg-ocean-200 selection:text-ocean-900 font-sans;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+/* Hiệu ứng nền sóng MoMo mềm mại bằng màu xanh nước nhạt */
+.momo-wave-bg {
+  background-color: #f0f9ff;
+  background-image: radial-gradient(at 0% 0%, #e0f2fe 0px, transparent 50%),
+                    radial-gradient(at 100% 0%, #bae6fd 0px, transparent 50%),
+                    radial-gradient(at 100% 100%, #e0f2fe 0px, transparent 50%),
+                    radial-gradient(at 0% 100%, #f0fdfa 0px, transparent 50%);
+}
+
+.momo-wave-pattern {
+  background-image: repeating-radial-gradient(circle at 100% 50%, transparent 0, #e0f2fe 18px, transparent 36px);
+  opacity: 0.45;
+}
+
+/* Thẻ chuẩn trắng tinh tế viền xanh nhạt */
+.card-clean {
+  @apply bg-white border border-ocean-100 shadow-sm shadow-ocean-500/5 hover:shadow-md hover:shadow-ocean-500/10 transition-all duration-200;
+}
