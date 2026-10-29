@@ -1,5 +1,6 @@
 package com.example.digital_wallet.model.entity;
 
+import com.example.digital_wallet.model.enums.PaymentMethod;
 import com.example.digital_wallet.model.enums.TransactionStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -34,6 +35,10 @@ public class Transaction {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "target_account_id")
     private WalletAccount targetAccount;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method", length = 30)
+    private PaymentMethod paymentMethod;
 
     @Column(name = "amount", nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;

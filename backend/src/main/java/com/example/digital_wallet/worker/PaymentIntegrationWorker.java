@@ -1,6 +1,7 @@
 package com.example.digital_wallet.worker;
 
-import com.example.digital_wallet.client.ExternalPaymentGatewayClient;
+import com.example.digital_wallet.client.PaymentGatewayFactory;
+import com.example.digital_wallet.client.PaymentGatewayStrategy;
 import com.example.digital_wallet.model.dto.PartnerPaymentResponse;
 import com.example.digital_wallet.model.event.PaymentProcessCompletedEvent;
 import com.example.digital_wallet.model.event.PaymentProcessFailedEvent;
@@ -19,7 +20,7 @@ import java.time.Instant;
 @RequiredArgsConstructor
 public class PaymentIntegrationWorker {
 
-    private final ExternalPaymentGatewayClient gatewayClient;
+    private final PaymentGatewayFactory gatewayFactory;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final ObjectMapper objectMapper;
 
@@ -43,8 +44,9 @@ public class PaymentIntegrationWorker {
 
         PartnerPaymentResponse partnerResponse;
         try {
-            // Gọi Cổng đối tác bên ngoài (được bảo vệ bởi CircuitBreaker & Retry)
-            partnerResponse = gatewayClient.processPayment(event);
+            // Lấy Strategy tương ứng dựa theo paymentMethod (VNPAY, MOMO, ZALOPAY, VIETQR...)
+            PaymentGatewayStrategy strategy = gatewayFactory.getStrategy(event.getPaymentMethod());
+            partnerResponse = strategy.processPayment(event);
         } catch (Exception e) {
             log.error("Lỗi ngoại lệ chưa xử lý khi gọi cổng thanh toán: {}", e.getMessage());
             partnerResponse = PartnerPaymentResponse.builder()
@@ -54,7 +56,8 @@ public class PaymentIntegrationWorker {
         }
 
         try {
-            String messageKey = event.getTransactionId().toString();
+            // Định tuyến Kafka Partition Key theo sourceAccountId để bảo đảm thứ tự FIFO cho cùng một tài khoản ví
+            String messageKey = event.getSourceAccountId() != null ? event.getSourceAccountId().toString() : event.getTransactionId().toString();
 
             if (partnerResponse.isSuccess()) {
                 // Kịch bản Thành công -> Bắn vào topic: payment.process.completed

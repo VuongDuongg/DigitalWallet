@@ -19,6 +19,7 @@ public class RedissonConfig {
     @Bean(destroyMethod = "shutdown")
     public RedissonClient redissonClient() {
         Config config = new Config();
+        config.setLockWatchdogTimeout(30000); // 30s Redisson Watchdog tự động gia hạn khóa chừng nào luồng đang chạy
         config.useSingleServer()
                 .setAddress("redis://" + redisHost + ":" + redisPort)
                 .setConnectionMinimumIdleSize(5)

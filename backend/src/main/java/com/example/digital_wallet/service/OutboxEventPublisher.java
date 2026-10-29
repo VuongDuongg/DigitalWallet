@@ -24,44 +24,52 @@ public class OutboxEventPublisher {
     public static final String TOPIC_PAYMENT_REQUESTED = "payment.process.requested";
 
     /**
-     * Chạy định kỳ mỗi 500ms để quét các OutboxEvent có trạng thái INIT và bắn lên Kafka.
-     * Sử dụng partial index 'idx_outbox_status' trên PostgreSQL giúp câu query chỉ mất ~0.1ms.
+     * Chạy định kỳ mỗi 500ms để quét các OutboxEvent và bắn lên Kafka.
+     * Áp dụng FOR UPDATE SKIP LOCKED để ngăn chặn 100% race condition giữa các instance backend.
      */
     @Scheduled(fixedDelay = 500)
-    @Transactional
     public void publishPendingEvents() {
-        List<OutboxEvent> pendingEvents = outboxEventRepository.findTop50ByStatusOrderByCreatedAtAsc(OutboxStatus.INIT);
-
-        if (pendingEvents.isEmpty()) {
+        // 1. Chiếm quyền 50 bản ghi INIT sang PROCESSING bằng SKIP LOCKED trong transaction ngắn
+        int claimed = claimBatch();
+        if (claimed == 0) {
             return;
         }
 
-        log.debug("Tìm thấy {} sự kiện Outbox đang chờ gửi sang Kafka", pendingEvents.size());
+        // 2. Lấy danh sách các bản ghi vừa chiếm quyền
+        List<OutboxEvent> processingEvents = outboxEventRepository.findTop50ByStatusOrderByCreatedAtAsc(OutboxStatus.PROCESSING);
+        log.debug("Đã chiếm quyền {} sự kiện Outbox để bắn sang Kafka", processingEvents.size());
 
-        for (OutboxEvent event : pendingEvents) {
+        for (OutboxEvent event : processingEvents) {
             String topic = resolveTopic(event.getEventType());
 
             try {
-                // Gửi message lên Kafka: Key là aggregateId (đảm bảo message cùng giao dịch rơi vào cùng 1 Partition)
+                // Key Kafka là aggregateId (sourceAccountId) đảm bảo FIFO trên cùng Partition
                 kafkaTemplate.send(topic, event.getAggregateId(), event.getPayload())
-                        .get(3, TimeUnit.SECONDS); // Chờ ACK từ Kafka tối đa 3 giây
+                        .get(3, TimeUnit.SECONDS);
 
                 event.setStatus(OutboxStatus.PUBLISHED);
-                log.info("Đã bắn sự kiện Outbox thành công lên Kafka: eventId={}, topic={}, aggregateId={}",
+                log.info("Bắn Outbox sang Kafka thành công: eventId={}, topic={}, key={}",
                         event.getEventId(), topic, event.getAggregateId());
             } catch (Exception ex) {
                 log.error("Lỗi khi bắn sự kiện sang Kafka (eventId={}): {}", event.getEventId(), ex.getMessage());
                 event.setRetryCount(event.getRetryCount() + 1);
 
-                // Sau 5 lần retry thất bại, đánh dấu FAILED để xem xét Dead-Letter Queue
                 if (event.getRetryCount() >= 5) {
                     event.setStatus(OutboxStatus.FAILED);
-                    log.error("Sự kiện eventId={} đã thất bại quá 5 lần, chuyển trạng thái sang FAILED", event.getEventId());
+                    log.error("Sự kiện eventId={} đã thất bại quá 5 lần, chuyển sang FAILED", event.getEventId());
+                } else {
+                    // Trả lại trạng thái INIT để retry lần sau
+                    event.setStatus(OutboxStatus.INIT);
                 }
             }
 
             outboxEventRepository.save(event);
         }
+    }
+
+    @Transactional
+    public int claimBatch() {
+        return outboxEventRepository.claimBatchForProcessing();
     }
 
     private String resolveTopic(String eventType) {

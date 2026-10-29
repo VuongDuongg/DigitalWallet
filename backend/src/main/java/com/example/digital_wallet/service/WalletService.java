@@ -6,6 +6,7 @@ import com.example.digital_wallet.exception.InsufficientBalanceException;
 import com.example.digital_wallet.model.dto.LedgerEntryResponse;
 import com.example.digital_wallet.model.dto.TransactionResponse;
 import com.example.digital_wallet.model.dto.TransferRequest;
+import com.example.digital_wallet.model.entity.BalanceSnapshot;
 import com.example.digital_wallet.model.entity.LedgerEntry;
 import com.example.digital_wallet.model.entity.OutboxEvent;
 import com.example.digital_wallet.model.entity.Transaction;
@@ -13,8 +14,10 @@ import com.example.digital_wallet.model.entity.WalletAccount;
 import com.example.digital_wallet.model.enums.AccountStatus;
 import com.example.digital_wallet.model.enums.EntryType;
 import com.example.digital_wallet.model.enums.OutboxStatus;
+import com.example.digital_wallet.model.enums.PaymentMethod;
 import com.example.digital_wallet.model.enums.TransactionStatus;
 import com.example.digital_wallet.model.event.PaymentProcessRequestedEvent;
+import com.example.digital_wallet.repository.BalanceSnapshotRepository;
 import com.example.digital_wallet.repository.LedgerEntryRepository;
 import com.example.digital_wallet.repository.OutboxEventRepository;
 import com.example.digital_wallet.repository.TransactionRepository;
@@ -25,9 +28,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -38,22 +43,30 @@ public class WalletService {
     private final WalletAccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
+    private final BalanceSnapshotRepository balanceSnapshotRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final IdempotencyService idempotencyService;
     private final DistributedLockService lockService;
     private final ObjectMapper objectMapper;
+    private final TransactionTemplate transactionTemplate;
+
+    public static final String SYSTEM_ESCROW_USER_ID = "SYSTEM_ESCROW";
 
     /**
      * Điểm vào xử lý chuyển tiền: Kết hợp Chống trùng lặp (Idempotency) và Khóa phân tán (Distributed Lock).
      */
     public TransactionResponse transfer(TransferRequest request) {
-        // 1. Chống trùng lặp: Chiếm quyền Idempotency Key trên Redis (TTL 120s)
-        idempotencyService.acquire(request.getIdempotencyKey());
+        // 1. Chống trùng lặp & Chống giả mạo: Băm SHA-256 payload (source + target + amount)
+        String payloadToHash = request.getSourceAccountId() + ":" + request.getTargetAccountId() + ":" + request.getAmount();
+        idempotencyService.acquire(request.getIdempotencyKey(), payloadToHash);
 
         try {
-            // 2. Chống Race Condition: Khóa phân tán đúng tài khoản nguồn trong 3s
+            // 2. Chống Race Condition: Khóa phân tán với Redisson Watchdog (tự động gia hạn)
+            // Khắc phục lỗi Self-Invocation bằng cách bọc transactionTemplate.execute()
             String lockKey = "lock:account:" + request.getSourceAccountId();
-            return lockService.executeWithLock(lockKey, 3, 5, () -> executeTransferInsideTransaction(request));
+            return lockService.executeWithLock(lockKey, 3, () ->
+                    transactionTemplate.execute(status -> executeTransferInsideTransaction(request))
+            );
         } catch (Exception ex) {
             // Nếu có lỗi xảy ra trước khi commit DB thành công, giải phóng key để cho phép retry
             if (!(ex instanceof InsufficientBalanceException)) {
@@ -95,33 +108,38 @@ public class WalletService {
         }
 
         // 4. Lưu Bản ghi Giao dịch Master (PENDING)
+        PaymentMethod method = request.getPaymentMethod() != null ? request.getPaymentMethod() : PaymentMethod.VNPAY;
         Transaction transaction = Transaction.builder()
                 .idempotencyKey(request.getIdempotencyKey())
                 .sourceAccount(sourceAccount)
                 .targetAccount(targetAccount)
                 .amount(request.getAmount())
+                .paymentMethod(method)
                 .status(TransactionStatus.PENDING)
                 .build();
         transaction = transactionRepository.save(transaction);
 
-        // 5. Ghi nhận 2 dòng Bút toán kép bất biến (Double-Entry Ledger)
-        // 5.1. Dòng DEBIT (Ghi Nợ - Giảm tiền ví nguồn)
-        LedgerEntry debitEntry = LedgerEntry.builder()
+        // 5. Ghi nhận 2 dòng Bút toán kép bất biến (Double-Entry Ledger) qua TÀI KHOẢN TREO (SYSTEM_ESCROW)
+        // Lỗ hổng rút ruột được triệt tiêu hoàn toàn: Ví B KHÔNG ĐƯỢC NHẬN TIỀN ở bước này!
+        WalletAccount escrowAccount = getOrCreateSystemEscrowAccount();
+
+        // 5.1. Dòng DEBIT (Ghi Nợ - Khóa/trừ tiền ví nguồn A)
+        LedgerEntry debitSource = LedgerEntry.builder()
                 .transaction(transaction)
                 .account(sourceAccount)
                 .entryType(EntryType.DEBIT)
                 .amount(request.getAmount())
                 .build();
-        ledgerEntryRepository.save(debitEntry);
 
-        // 5.2. Dòng CREDIT (Ghi Có - Tăng tiền ví đích)
-        LedgerEntry creditEntry = LedgerEntry.builder()
+        // 5.2. Dòng CREDIT (Ghi Có - Tạm giữ tiền vào Tài khoản Treo SYSTEM_ESCROW)
+        LedgerEntry creditEscrow = LedgerEntry.builder()
                 .transaction(transaction)
-                .account(targetAccount)
+                .account(escrowAccount)
                 .entryType(EntryType.CREDIT)
                 .amount(request.getAmount())
                 .build();
-        ledgerEntryRepository.save(creditEntry);
+
+        ledgerEntryRepository.saveAll(List.of(debitSource, creditEscrow));
 
         // 6. Ghi Outbox Event vào DB (Transactional Outbox Pattern)
         PaymentProcessRequestedEvent eventPayload = PaymentProcessRequestedEvent.builder()
@@ -130,6 +148,7 @@ public class WalletService {
                 .sourceAccountId(sourceAccount.getAccountId())
                 .targetAccountId(targetAccount.getAccountId())
                 .amount(transaction.getAmount())
+                .paymentMethod(method)
                 .timestamp(Instant.now())
                 .build();
 
@@ -140,9 +159,10 @@ public class WalletService {
             throw new RuntimeException("Lỗi chuyển đổi Event sang JSON", e);
         }
 
+        // Key Kafka aggregateId là sourceAccountId giúp đảm bảo thứ tự FIFO cùng partition
         OutboxEvent outboxEvent = OutboxEvent.builder()
                 .aggregateType("TRANSACTION")
-                .aggregateId(transaction.getTransactionId().toString())
+                .aggregateId(sourceAccount.getAccountId().toString())
                 .eventType("PAYMENT_PROCESS_REQUESTED")
                 .payload(payloadJson)
                 .status(OutboxStatus.INIT)
@@ -150,7 +170,7 @@ public class WalletService {
                 .build();
         outboxEventRepository.save(outboxEvent);
 
-        log.info("Khởi tạo giao dịch chuyển tiền thành công: txId={}, amount={}", transaction.getTransactionId(), transaction.getAmount());
+        log.info("Khởi tạo giao dịch chuyển tiền thành công qua Escrow: txId={}, amount={}", transaction.getTransactionId(), transaction.getAmount());
 
         return TransactionResponse.builder()
                 .transactionId(transaction.getTransactionId())
@@ -158,10 +178,21 @@ public class WalletService {
                 .sourceAccountId(sourceAccount.getAccountId())
                 .targetAccountId(targetAccount.getAccountId())
                 .amount(transaction.getAmount())
+                .paymentMethod(transaction.getPaymentMethod())
                 .status(transaction.getStatus())
                 .message("Giao dịch đang được xử lý")
                 .createdAt(transaction.getCreatedAt())
                 .build();
+    }
+
+    @Transactional
+    public WalletAccount getOrCreateSystemEscrowAccount() {
+        return accountRepository.findByUserId(SYSTEM_ESCROW_USER_ID)
+                .orElseGet(() -> accountRepository.save(WalletAccount.builder()
+                        .userId(SYSTEM_ESCROW_USER_ID)
+                        .currency("VND")
+                        .status(AccountStatus.ACTIVE)
+                        .build()));
     }
 
     @Transactional
@@ -210,6 +241,7 @@ public class WalletService {
                 .transactionId(transaction.getTransactionId())
                 .targetAccountId(account.getAccountId())
                 .amount(transaction.getAmount())
+                .paymentMethod(transaction.getPaymentMethod())
                 .status(transaction.getStatus())
                 .message("Nạp tiền thành công")
                 .createdAt(transaction.getCreatedAt())
@@ -221,7 +253,26 @@ public class WalletService {
         if (!accountRepository.existsById(accountId)) {
             throw new AccountNotFoundException("Không tìm thấy tài khoản: " + accountId);
         }
-        return ledgerEntryRepository.calculateCurrentBalance(accountId);
+
+        // Tối ưu hóa hiệu năng Checkpoint/Snapshot: Nếu có Snapshot, chỉ tính các dòng phát sinh sau Snapshot
+        return balanceSnapshotRepository.findLatestSnapshotByAccountId(accountId)
+                .map(snapshot -> {
+                    BigDecimal delta = ledgerEntryRepository.calculateBalanceDeltaSince(accountId, snapshot.getCreatedAt());
+                    return snapshot.getBalance().add(delta);
+                })
+                .orElseGet(() -> ledgerEntryRepository.calculateCurrentBalance(accountId));
+    }
+
+    @Transactional
+    public BalanceSnapshot createBalanceSnapshot(UUID accountId) {
+        WalletAccount account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new AccountNotFoundException("Không tìm thấy tài khoản: " + accountId));
+        BigDecimal currentBalance = getBalance(accountId);
+        BalanceSnapshot snapshot = BalanceSnapshot.builder()
+                .account(account)
+                .balance(currentBalance)
+                .build();
+        return balanceSnapshotRepository.save(snapshot);
     }
 
     @Transactional(readOnly = true)
@@ -250,6 +301,7 @@ public class WalletService {
                 .sourceAccountId(tx.getSourceAccount() != null ? tx.getSourceAccount().getAccountId() : null)
                 .targetAccountId(tx.getTargetAccount() != null ? tx.getTargetAccount().getAccountId() : null)
                 .amount(tx.getAmount())
+                .paymentMethod(tx.getPaymentMethod())
                 .status(tx.getStatus())
                 .message(tx.getFailureReason())
                 .createdAt(tx.getCreatedAt())

@@ -88,7 +88,22 @@ public class WalletController {
     }
 
     /**
-     * 6. Tra cứu chi tiết & trạng thái giao dịch (PENDING -> COMPLETED hoặc FAILED)
+     * 6. Tạo Balance Snapshot (Ledger Checkpoint) để tối ưu hóa hiệu năng tính số dư
+     */
+    @PostMapping("/{accountId}/snapshot")
+    public ResponseEntity<Map<String, Object>> createSnapshot(@PathVariable UUID accountId) {
+        com.example.digital_wallet.model.entity.BalanceSnapshot snapshot = walletService.createBalanceSnapshot(accountId);
+        return ResponseEntity.ok(Map.of(
+                "snapshotId", snapshot.getSnapshotId(),
+                "accountId", accountId,
+                "snapshotBalance", snapshot.getBalance(),
+                "createdAt", snapshot.getCreatedAt(),
+                "message", "Đã chốt Snapshot số dư thành công"
+        ));
+    }
+
+    /**
+     * 7. Tra cứu chi tiết & trạng thái giao dịch (PENDING -> COMPLETED hoặc FAILED)
      */
     @GetMapping("/transactions/{transactionId}")
     public ResponseEntity<TransactionResponse> getTransaction(@PathVariable UUID transactionId) {

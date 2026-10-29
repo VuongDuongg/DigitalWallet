@@ -1,5 +1,6 @@
 package com.example.digital_wallet.model.dto;
 
+import com.example.digital_wallet.model.enums.PaymentMethod;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -27,6 +28,8 @@ public class TransferRequest {
     @NotNull(message = "Số tiền không được để trống")
     @DecimalMin(value = "1000.00", message = "Số tiền chuyển tối thiểu là 1,000 VND")
     private BigDecimal amount;
+
+    private PaymentMethod paymentMethod;
 
     private String description;
 }

@@ -1,5 +1,6 @@
 package com.example.digital_wallet.model.event;
 
+import com.example.digital_wallet.model.enums.PaymentMethod;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -18,5 +19,6 @@ public class PaymentProcessRequestedEvent {
     private UUID sourceAccountId;
     private UUID targetAccountId;
     private BigDecimal amount;
+    private PaymentMethod paymentMethod;
     private Instant timestamp;
 }

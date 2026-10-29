@@ -50,6 +50,12 @@ spring:
       properties:
         spring.json.trusted.packages: "com.example.digital_wallet.*"
 
+# Cấu hình bảo mật chữ ký HMAC cho Cổng thanh toán (Chống Webhook Spoofing)
+payment:
+  gateway:
+    secret-key: "digital-wallet-secure-hmac-key-2026"
+    momo-secret-key: "momo-secret-key-super-secure"
+    vnpay-secret-key: "vnpay-secret-key-super-secure"
 
 # 4. Cấu hình Resilience4j Fault Tolerance (Worker Cổng thanh toán)
 resilience4j:
