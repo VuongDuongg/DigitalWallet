@@ -1,33 +1,87 @@
-HELP.md
+# ==========================================
+# 1. Maven / Gradle Build Artifacts
+# ==========================================
 target/
+build/
+out/
+dist/
+HELP.md
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
+!**/src/main/**/build/
+!**/src/test/**/build/
 
-### STS ###
+# ==========================================
+# 2. Logs & Temporary Files
+# ==========================================
+*.log
+logs/
+log/
+temp/
+tmp/
+*.tmp
+*.bak
+*.swp
+*~
+
+# ==========================================
+# 3. Environment & Security Credentials (BẢO MẬT BẮT BUỘC)
+# Tuyệt đối không commit key bí mật, token, chứng chỉ ngân hàng/cổng thanh toán
+# ==========================================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.jks
+*.p12
+*.pfx
+*.keystore
+
+# ==========================================
+# 4. JVM Crash Dumps
+# ==========================================
+hs_err_pid*
+replay_pid*
+
+# ==========================================
+# 5. IDE / Editors
+# ==========================================
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+### Eclipse / STS ###
 .apt_generated
 .classpath
 .factorypath
 .project
-.settings
+.settings/
 .springBeans
 .sts4-cache
-
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
 
 ### NetBeans ###
 /nbproject/private/
 /nbbuild/
-/dist/
 /nbdist/
 /.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
 
 ### VS Code ###
 .vscode/
+*.code-workspace
+
+# ==========================================
+# 6. Operating System Files
+# ==========================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini

@@ -1,0 +1,88 @@
+# ==========================================
+# Root .gitignore - Digital Wallet Fullstack
+# ==========================================
+
+# 1. Environment & Secrets (BẢO MẬT TÀI CHÍNH / API KEYS)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.jks
+*.p12
+*.pfx
+*.keystore
+
+# 2. Backend (Java / Spring Boot / Maven / Gradle)
+**/target/
+**/build/
+**/out/
+**/dist/
+**/.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+hs_err_pid*
+replay_pid*
+
+# 3. Frontend (React / TypeScript / Vite / Node.js)
+**/node_modules/
+**/.pnp
+**/.pnp.js
+**/dist/
+**/dist-ssr/
+**/.vite/
+**/.next/
+**/.turbo/
+.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 4. Logs & Temp
+*.log
+**/logs/
+**/log/
+temp/
+tmp/
+*.tmp
+*.bak
+*.swp
+*~
+
+# 5. Database & Docker Volume Data
+docker-data/
+postgres_data/
+mysql_data/
+redis_data/
+kafka_data/
+*.sqlite
+*.db
+
+# 6. IDEs & Editors
+.idea/
+*.iws
+*.iml
+*.ipr
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.code-workspace
+
+# 7. Operating System
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
