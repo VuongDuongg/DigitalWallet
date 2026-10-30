@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "cap:sync": "npm run build && npx cap sync android",
     "cap:open": "npx cap open android",
-    "cap:run": "npm run build && npx cap run android"
+    "cap:run": "npm run build && npx cap run android",
+    "cap:live": "npx cap run android -l --host 192.168.100.150 --port 5173"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",
