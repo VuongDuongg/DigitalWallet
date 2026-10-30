@@ -244,3 +244,4 @@ npm run dev
 ## 👨‍💻 7. Đóng góp & Bản quyền (License)
 Dự án được xây dựng phục vụ nghiên cứu, học tập và triển khai giải pháp công nghệ tài chính FinTech doanh nghiệp.
 Phát hành theo giấy phép **MIT License**.
+
