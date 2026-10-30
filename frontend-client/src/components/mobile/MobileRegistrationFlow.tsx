@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MobileKeypad } from './MobileKeypad';
-import { Wallet, ShieldCheck, CheckCircle2, ArrowLeft, XCircle } from 'lucide-react';
+import { Wallet, ShieldCheck, CheckCircle2, ArrowLeft, XCircle, Terminal } from 'lucide-react';
+import { authApi } from '../../api/authApi';
 import type { RegistrationStep } from '../../types';
 
 interface MobileRegistrationFlowProps {
@@ -18,8 +19,9 @@ export const MobileRegistrationFlow: React.FC<MobileRegistrationFlowProps> = ({
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [activePinField, setActivePinField] = useState<'pin' | 'confirmPin'>('pin');
-  const [countdown, setCountdown] = useState(60);
+  const [countdown, setCountdown] = useState(120);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   // Countdown timer for OTP
   useEffect(() => {
@@ -78,24 +80,67 @@ export const MobileRegistrationFlow: React.FC<MobileRegistrationFlowProps> = ({
     }
   };
 
-  // Submit Phone
-  const handlePhoneSubmit = () => {
+  // Submit Phone -> Gọi Spring Boot Backend sinh mã OTP lưu Redis (120s) và in ra Console
+  const handlePhoneSubmit = async () => {
     if (phone.length < 10) {
       setErrorMsg('Vui lòng nhập số điện thoại hợp lệ (10 số)');
       return;
     }
-    setCountdown(60);
-    setOtp('123456'); // Gợi ý mã OTP mô phỏng
-    setStep('OTP');
+    setIsLoading(true);
+    setErrorMsg('');
+    try {
+      await authApi.sendOtp(phone);
+      setCountdown(120);
+      setOtp('');
+      setStep('OTP');
+    } catch (err: unknown) {
+      console.warn('Backend chưa sẵn sàng hoặc lỗi gọi sendOtp:', err);
+      // Vẫn cho phép vào màn OTP để test
+      setCountdown(120);
+      setOtp('');
+      setStep('OTP');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Submit OTP
-  const handleOtpSubmit = () => {
+  // Submit OTP -> Gọi Spring Boot xác thực với Redis
+  const handleOtpSubmit = async () => {
     if (otp.length !== 6) {
       setErrorMsg('Vui lòng nhập đủ 6 chữ số mã xác thực');
       return;
     }
-    setStep('PIN');
+    setIsLoading(true);
+    setErrorMsg('');
+    try {
+      const res = await authApi.verifyOtp(phone, otp);
+      if (res && res.success) {
+        setStep('PIN');
+      } else {
+        setErrorMsg(res?.message || 'Mã OTP không chính xác hoặc đã hết hạn (sau 120s)!');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Mã OTP không chính xác hoặc đã hết hạn sau 120s!';
+      setErrorMsg(msg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Gửi lại mã OTP
+  const handleResendOtp = async () => {
+    setIsLoading(true);
+    setErrorMsg('');
+    try {
+      await authApi.sendOtp(phone);
+      setCountdown(120);
+      setOtp('');
+    } catch (err: unknown) {
+      console.warn('Lỗi gửi lại OTP:', err);
+      setCountdown(120);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Submit PIN
@@ -197,10 +242,10 @@ export const MobileRegistrationFlow: React.FC<MobileRegistrationFlowProps> = ({
             <button
               type="button"
               onClick={handlePhoneSubmit}
-              disabled={phone.length < 10}
+              disabled={phone.length < 10 || isLoading}
               className="w-full py-4 rounded-2xl bg-ocean-900/90 hover:bg-ocean-900 text-white font-extrabold text-sm tracking-wider uppercase transition-all shadow-xl disabled:opacity-40 disabled:pointer-events-none active:scale-[0.98]"
             >
-              TIẾP TỤC
+              {isLoading ? 'Đang gửi mã OTP...' : 'TIẾP TỤC'}
             </button>
 
             <p className="text-xs text-ocean-100/90 font-medium">
@@ -211,7 +256,7 @@ export const MobileRegistrationFlow: React.FC<MobileRegistrationFlowProps> = ({
 
         {/* STEP 2: NHẬP MÃ XÁC THỰC OTP (Ảnh 1 - Màn 3) */}
         {step === 'OTP' && (
-          <div className="space-y-6 text-center animate-fade-in">
+          <div className="space-y-5 text-center animate-fade-in">
             <div className="w-16 h-16 rounded-3xl bg-white/20 backdrop-blur-md mx-auto flex items-center justify-center border border-white/30 shadow-lg">
               <ShieldCheck className="w-8 h-8 text-white" />
             </div>
@@ -222,6 +267,14 @@ export const MobileRegistrationFlow: React.FC<MobileRegistrationFlowProps> = ({
                 Một tin nhắn chứa mã xác thực đã gửi đến{' '}
                 <strong className="text-white underline">{phone}</strong>
               </p>
+            </div>
+
+            {/* Terminal Hint Banner */}
+            <div className="p-2.5 rounded-2xl bg-slate-900/70 border border-white/20 text-[11px] text-ocean-200 flex items-center gap-2 text-left shadow-inner">
+              <Terminal className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>
+                Nhìn vào <strong>Console / Terminal Spring Boot</strong> ở máy tính để lấy mã OTP!
+              </span>
             </div>
 
             {/* 6-digit OTP Box */}
@@ -247,10 +300,10 @@ export const MobileRegistrationFlow: React.FC<MobileRegistrationFlowProps> = ({
             <button
               type="button"
               onClick={handleOtpSubmit}
-              disabled={otp.length !== 6}
+              disabled={otp.length !== 6 || isLoading}
               className="w-full py-4 rounded-2xl bg-ocean-900/90 hover:bg-ocean-900 text-white font-extrabold text-sm tracking-wider uppercase transition-all shadow-xl disabled:opacity-40 disabled:pointer-events-none active:scale-[0.98]"
             >
-              TIẾP TỤC
+              {isLoading ? 'Đang xác thực...' : 'TIẾP TỤC'}
             </button>
 
             {/* Resend OTP */}
@@ -261,10 +314,7 @@ export const MobileRegistrationFlow: React.FC<MobileRegistrationFlowProps> = ({
               ) : (
                 <button
                   type="button"
-                  onClick={() => {
-                    setCountdown(60);
-                    setOtp('654321');
-                  }}
+                  onClick={handleResendOtp}
                   className="font-bold text-white underline hover:text-ocean-200"
                 >
                   GỬI LẠI
