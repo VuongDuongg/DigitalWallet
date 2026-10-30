@@ -12,7 +12,8 @@ const getBaseURL = (): string => {
     return import.meta.env.VITE_API_URL;
   }
   if (Capacitor.isNativePlatform()) {
-    return 'http://10.0.2.2:8080/api/v1';
+    // 192.168.100.150 là IP mạng LAN của máy tính, dùng được cho cả điện thoại thật (cùng Wi-Fi) và máy ảo Android
+    return 'http://192.168.100.150:8080/api/v1';
   }
   return '/api/v1';
 };
