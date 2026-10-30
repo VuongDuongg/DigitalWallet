@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { MobileAppContainer } from './components/mobile/MobileAppContainer';
 import { Header } from './components/layout/Header';
 import { HeroBanner } from './components/home/HeroBanner';
 import { ServiceCategories } from './components/home/ServiceCategories';
@@ -23,6 +25,8 @@ import {
 } from 'lucide-react';
 
 export function App() {
+  const isNative = Capacitor.isNativePlatform();
+  const [isMobileMode, setIsMobileMode] = useState<boolean>(false);
   const [accountId, setAccountId] = useState<string>('');
   const [userIdInput, setUserIdInput] = useState<string>('customer_vip_01');
   const [balance, setBalance] = useState<number>(0);
@@ -138,6 +142,25 @@ export function App() {
     };
   }, [accountId, fetchBalance]);
 
+  // 1. Khi chạy trên Native Android (Capacitor): Tự động hiển thị 100% Giao diện Mobile App MoMo
+  if (isNative) {
+    return <MobileAppContainer initialAccountId={accountId} />;
+  }
+
+  // 2. Khi người dùng bấm chuyển sang chế độ Mobile App trên Web
+  if (isMobileMode) {
+    return (
+      <div className="min-h-screen bg-slate-900/95 flex items-center justify-center p-0 sm:p-4">
+        <div className="w-full max-w-md h-screen sm:h-[94vh] sm:rounded-[44px] sm:border-[8px] sm:border-slate-800 shadow-[0_20px_60px_rgba(0,0,0,0.6)] overflow-y-auto relative bg-slate-50">
+          <MobileAppContainer
+            initialAccountId={accountId}
+            onSwitchToWeb={() => setIsMobileMode(false)}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-white text-slate-800">
       {/* 1. Header Navigation Bar */}
@@ -146,6 +169,7 @@ export function App() {
         isRefreshing={isBalanceLoading}
         currentAccountId={accountId}
         onOpenMyWallet={scrollToWallet}
+        onOpenMobileMode={() => setIsMobileMode(true)}
       />
 
       {/* Global Toast Notification */}

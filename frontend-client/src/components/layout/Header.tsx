@@ -13,6 +13,7 @@ export interface HeaderProps {
   isRefreshing?: boolean;
   currentAccountId?: string;
   onOpenMyWallet?: () => void;
+  onOpenMobileMode?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -20,6 +21,7 @@ export const Header: React.FC<HeaderProps> = ({
   isRefreshing,
   currentAccountId,
   onOpenMyWallet,
+  onOpenMobileMode,
 }) => {
   const [searchKeyword, setSearchKeyword] = useState('');
 
@@ -87,6 +89,18 @@ export const Header: React.FC<HeaderProps> = ({
             <ShieldCheck className="w-3.5 h-3.5 text-ocean-600" />
             <span>Escrow 100%</span>
           </div>
+
+          {/* Switch to Mobile View Mode */}
+          {onOpenMobileMode && (
+            <button
+              type="button"
+              onClick={onOpenMobileMode}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-ocean-500 to-sky-500 hover:from-ocean-600 hover:to-sky-600 text-white text-xs font-bold shadow-sm shadow-ocean-500/20 active:scale-95 transition-all"
+              title="Xem mô phỏng ứng dụng Mobile MoMo trên điện thoại"
+            >
+              <span>📱 App MoMo</span>
+            </button>
+          )}
 
           {/* Quick Wallet Button */}
           {onOpenMyWallet ? (

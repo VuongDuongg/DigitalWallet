@@ -76,3 +76,30 @@ export interface SnapshotResponse {
   message: string;
 }
 
+export interface BankInfo {
+  code: string;
+  name: string;
+  shortName: string;
+  color: string;
+  bgColor: string;
+  logoText: string;
+}
+
+export interface LinkedBank {
+  id: string;
+  bankCode: string;
+  bankName: string;
+  shortName: string;
+  accountNumberMasked: string;
+  cardHolderName: string;
+  linkedAt: string;
+  color: string;
+  bgColor: string;
+}
+
+export type MobileTab = 'home' | 'promos' | 'history' | 'friends' | 'wallet';
+
+export type RegistrationStep = 'PHONE' | 'OTP' | 'PIN';
+
+export type BankLinkingStep = 'SELECT_BANK' | 'CARD_INFO' | 'OTP_CONFIRM' | 'SUCCESS';
+
