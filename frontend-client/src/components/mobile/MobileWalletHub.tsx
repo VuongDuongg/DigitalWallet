@@ -14,6 +14,7 @@ import {
   Trash2,
   Lock,
   Sparkles,
+  LogOut,
 } from 'lucide-react';
 
 interface MobileWalletHubProps {
@@ -27,6 +28,7 @@ interface MobileWalletHubProps {
   onOpenTransfer: () => void;
   onOpenQr: () => void;
   onUnlinkBank: (bankId: string) => void;
+  onLogout?: () => void;
 }
 
 export const MobileWalletHub: React.FC<MobileWalletHubProps> = ({
@@ -40,6 +42,7 @@ export const MobileWalletHub: React.FC<MobileWalletHubProps> = ({
   onOpenTransfer,
   onOpenQr,
   onUnlinkBank,
+  onLogout,
 }) => {
   const [showBalance, setShowBalance] = useState(true);
 
@@ -300,6 +303,25 @@ export const MobileWalletHub: React.FC<MobileWalletHubProps> = ({
             </div>
             <ChevronRight className="w-4 h-4 text-slate-300" />
           </div>
+
+          {/* Đăng xuất tài khoản */}
+          {onLogout && (
+            <div
+              onClick={onLogout}
+              className="p-3.5 flex items-center justify-between hover:bg-rose-50/70 transition-colors cursor-pointer group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <LogOut className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-rose-600">Đăng xuất tài khoản</div>
+                  <div className="text-[11px] text-slate-400">Quay lại màn hình Đăng ký / Đăng nhập</div>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-rose-400" />
+            </div>
+          )}
         </div>
 
         {/* Thông tin ví UUID hệ thống */}

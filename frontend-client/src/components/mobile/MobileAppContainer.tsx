@@ -20,15 +20,29 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
   initialAccountId = '',
   onSwitchToWeb,
 }) => {
+  // Kiểm tra phiên đăng nhập từ LocalStorage
+  const [session, setSession] = useState<{
+    phone: string;
+    accountId: string;
+    pin: string;
+  } | null>(() => {
+    try {
+      const saved = localStorage.getItem('digital_wallet_session');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const [activeTab, setActiveTab] = useState<MobileTab>('home');
-  const [userPhone, setUserPhone] = useState('0968891234');
-  const [accountId, setAccountId] = useState(initialAccountId);
-  const [balance, setBalance] = useState(139999);
+  const [userPhone, setUserPhone] = useState<string>(session?.phone || '');
+  const [accountId, setAccountId] = useState<string>(session?.accountId || initialAccountId || '');
+  const [balance, setBalance] = useState<number>(session ? 139999 : 0);
   const [isBalanceLoading, setIsBalanceLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Flow State
-  const [isRegistering, setIsRegistering] = useState(false);
+  // Flow State: Nếu chưa đăng ký/đăng nhập -> BẮT BUỘC hiện màn hình Đăng ký SĐT (Ảnh 1)!
+  const [isRegistering, setIsRegistering] = useState<boolean>(!session);
   const [isBankLinkingOpen, setIsBankLinkingOpen] = useState(false);
 
   // Modals
@@ -37,20 +51,15 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
   const [isQrOpen, setIsQrOpen] = useState(false);
   const [qrInitialTab, setQrInitialTab] = useState<'scan' | 'my-qr'>('my-qr');
 
-  // Linked Banks state (Mặc định có 1 thẻ TPBank tương tự ảnh mẫu MoMo của người dùng)
-  const [linkedBanks, setLinkedBanks] = useState<LinkedBank[]>([
-    {
-      id: 'tpbank_default',
-      bankCode: 'TPB',
-      bankName: 'NH TMCP Tiên Phong',
-      shortName: 'TPBank',
-      accountNumberMasked: '9704 23xx xxxx 1890',
-      cardHolderName: 'NGUYEN VAN A',
-      linkedAt: '28/10/2026',
-      color: '#7b1fa2',
-      bgColor: '#f3e5f5',
-    },
-  ]);
+  // Danh sách ngân hàng liên kết: lưu trong LocalStorage (mặc định rỗng để người dùng tự tay trải nghiệm liên kết)
+  const [linkedBanks, setLinkedBanks] = useState<LinkedBank[]>(() => {
+    try {
+      const saved = localStorage.getItem('digital_wallet_linked_banks');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -81,22 +90,41 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
   const handleRegisterSuccess = async (phone: string, pin: string) => {
     setUserPhone(phone);
     setIsRegistering(false);
-    showToast(`Kích hoạt thành công ví cho số ${phone} (PIN: ${pin})`);
+    showToast(`Kích hoạt thành công ví cho số ${phone}!`);
 
+    let newAccountId = `acc_${Date.now()}`;
     // Tự động tạo account trên Spring Boot Backend
     try {
       const newAcc = await walletApi.createAccount({ userId: phone, currency: 'VND' });
-      setAccountId(newAcc.accountId);
+      newAccountId = newAcc.accountId;
     } catch {
       // Dự phòng mã mô phỏng nếu backend chưa chạy
-      setAccountId(`acc_${Date.now()}`);
     }
+
+    setAccountId(newAccountId);
+    const newSession = { phone, accountId: newAccountId, pin };
+    setSession(newSession);
+    localStorage.setItem('digital_wallet_session', JSON.stringify(newSession));
     setActiveTab('home');
+  };
+
+  // Handle Logout
+  const handleLogout = () => {
+    localStorage.removeItem('digital_wallet_session');
+    setSession(null);
+    setUserPhone('');
+    setAccountId('');
+    setIsRegistering(true);
+    showToast('Đã đăng xuất tài khoản ví');
   };
 
   // Handle successful bank linking flow (Ảnh 2)
   const handleBankLinkingSuccess = (newBank: LinkedBank) => {
-    setLinkedBanks((prev) => [newBank, ...prev]);
+    setLinkedBanks((prev) => {
+      const updated = [newBank, ...prev];
+      localStorage.setItem('digital_wallet_linked_banks', JSON.stringify(updated));
+      return updated;
+    });
     setIsBankLinkingOpen(false);
     showToast(`Đã liên kết thành công thẻ ${newBank.shortName}!`);
     setActiveTab('wallet');
@@ -104,7 +132,11 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
 
   // Handle unlink bank
   const handleUnlinkBank = (bankId: string) => {
-    setLinkedBanks((prev) => prev.filter((b) => b.id !== bankId));
+    setLinkedBanks((prev) => {
+      const updated = prev.filter((b) => b.id !== bankId);
+      localStorage.setItem('digital_wallet_linked_banks', JSON.stringify(updated));
+      return updated;
+    });
     showToast('Đã hủy liên kết thẻ ngân hàng');
   };
 
@@ -327,6 +359,7 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
             onOpenTransfer={() => setIsTransferOpen(true)}
             onOpenQr={() => handleOpenQr('my-qr')}
             onUnlinkBank={handleUnlinkBank}
+            onLogout={handleLogout}
           />
         )}
       </main>
@@ -360,3 +393,4 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
     </div>
   );
 };
+

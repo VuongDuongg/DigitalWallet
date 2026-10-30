@@ -130,3 +130,4 @@ export const POPULAR_BANKS: BankInfo[] = [
     logoText: 'MSB',
   },
 ];
+
