@@ -22,3 +22,4 @@ export const authApi = {
     return (await axiosClient.post('/auth/otp/verify', { phoneNumber, otp })) as unknown as OtpResponse;
   },
 };
+

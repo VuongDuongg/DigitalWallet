@@ -35,6 +35,9 @@ public class OtpService {
         redisTemplate.opsForValue().set(redisKey, otp, Duration.ofSeconds(OTP_TTL_SECONDS));
 
         // Mock SMS Service: In to, rõ ràng ra Terminal
+        System.out.println("\n=======================================================");
+        System.out.println(">>>> [TEST SMS] Ma OTP gui toi so " + cleanPhone + " la: " + otp + " <<<<");
+        System.out.println("=======================================================\n");
         log.info(">>>> [TEST SMS] Ma OTP gui toi so {} la: {} <<<<", cleanPhone, otp);
 
         return otp;
@@ -78,3 +81,4 @@ public class OtpService {
         return trimmed;
     }
 }
+

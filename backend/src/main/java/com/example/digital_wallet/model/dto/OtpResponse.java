@@ -16,3 +16,4 @@ public class OtpResponse {
     private long expiresInSeconds;
     private String phoneNumber;
 }
+

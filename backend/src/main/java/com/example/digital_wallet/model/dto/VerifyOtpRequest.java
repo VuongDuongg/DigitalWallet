@@ -22,3 +22,4 @@ public class VerifyOtpRequest {
     @Pattern(regexp = "^[0-9]{6}$", message = "Mã OTP chỉ chứa các chữ số")
     private String otp;
 }
+
